@@ -1,0 +1,17 @@
+[
+  {
+    "id": "hatanaka",
+    "nome": "Hatanaka",
+    "arquivo": "dados-hatanaka.json"
+  },
+  {
+    "id": "bussinati",
+    "nome": "Bussinati",
+    "arquivo": "dados-bussinati.json"
+  },
+  {
+    "id": "rapariga",
+    "nome": "Rapariga",
+    "arquivo": "dados-rapariga.json"
+  }
+]

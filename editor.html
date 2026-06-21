@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>Editor — Anamnese da Família</title>
+  <link rel="stylesheet" href="estilo.css" />
+</head>
+<body>
+  <header class="topo">
+    <h1>✏️ Editor da Anamnese</h1>
+    <span class="espaco"></span>
+    <a href="index.html"><button class="secundario pequeno">Abrir visualizador</button></a>
+  </header>
+
+  <main class="conteudo">
+    <div class="dica">
+      <strong>Como funciona:</strong> tudo acontece no seu navegador, nada é enviado para a internet aqui.
+      Escolha a família, edite os dados, defina a senha e baixe o arquivo <code>dados-&lt;família&gt;.json</code> já criptografado.
+      Depois é só subir esse arquivo no GitHub. <br>
+      🔑 <strong>Para trocar a senha no futuro:</strong> carregue os dados da família com a senha antiga, escolha uma senha nova na
+      seção "Gerar arquivo" e baixe o arquivo novamente. <br>
+      💾 <strong>Edição aos poucos:</strong> tudo que você preencher é salvo automaticamente como rascunho neste navegador e
+      volta sozinho quando você reabrir o editor — assim dá pra completar os dados com o tempo. Quando terminar, gere o arquivo e suba no GitHub.
+    </div>
+
+    <!-- Selecionar família -->
+    <section class="painel">
+      <h2>1. Escolher a família</h2>
+      <div class="form-grade">
+        <div class="campo">
+          <label>Família</label>
+          <select id="familiaSelect"></select>
+        </div>
+      </div>
+
+      <div id="boxNovaFamilia" style="display:none">
+        <div class="form-grade">
+          <div class="campo">
+            <label>Identificador (sem espaços, minúsculo — vira o nome do arquivo e a senha padrão)</label>
+            <input id="novaFamiliaId" type="text" placeholder="Ex.: silva" />
+          </div>
+          <div class="campo">
+            <label>Nome de exibição</label>
+            <input id="novaFamiliaNome" type="text" placeholder="Ex.: Silva" />
+          </div>
+        </div>
+        <p style="font-size:12px;color:#b8860b;margin:4px 0 0">⚠️ Ao criar uma família nova, adicione-a também no arquivo <code>familias.json</code> (instruções no README).</p>
+      </div>
+
+      <div id="avisoRascunho" class="dica" style="display:none;background:#fff7e6;border-color:#ffe0a3;color:#5a4a1a"></div>
+
+      <h3 style="color:#0d3b8a;margin-top:16px">Carregar dados existentes desta família (opcional)</h3>
+      <p style="margin-top:0;color:#5b6776;font-size:14px">Para editar dados já salvos, informe a senha e carregue do servidor, ou selecione o arquivo manualmente.</p>
+      <div class="form-grade">
+        <div class="campo">
+          <label>Senha atual</label>
+          <input id="senhaCarregar" type="password" placeholder="Senha para descriptografar" />
+        </div>
+        <div class="campo">
+          <label>Ou selecionar arquivo manualmente</label>
+          <input id="arquivoExistente" type="file" accept=".json,application/json" />
+        </div>
+      </div>
+      <div class="barra-acoes">
+        <button id="btnCarregarServidor" class="secundario">Carregar do servidor</button>
+        <button id="btnCarregar" class="secundario">Carregar do arquivo selecionado</button>
+        <span id="statusCarregar"></span>
+      </div>
+    </section>
+
+    <!-- Dados da família -->
+    <section class="painel">
+      <h2>2. Nome da família (exibição)</h2>
+      <div class="form-grade">
+        <div class="campo">
+          <label>Nome da família</label>
+          <input id="familiaNome" type="text" placeholder="Ex.: Hatanaka" />
+        </div>
+      </div>
+    </section>
+
+    <!-- Lista de membros -->
+    <section class="painel">
+      <h2>3. Membros</h2>
+      <div id="listaMembros"></div>
+      <div class="barra-acoes">
+        <button id="btnAddMembro" class="verde">+ Adicionar membro</button>
+        <span id="statusRascunho" style="color:#1a7f5a;font-size:13px"></span>
+      </div>
+    </section>
+
+    <!-- Formulário de membro -->
+    <section class="painel" id="painelMembro" style="display:none">
+      <h2 id="tituloMembro">Novo membro</h2>
+
+      <h3 style="color:#0d3b8a">Identificação</h3>
+      <div class="form-grade">
+        <div class="campo"><label>Nome completo *</label><input id="m_nome" type="text" /></div>
+        <div class="campo"><label>Parentesco</label><input id="m_parentesco" type="text" placeholder="Ex.: Pai, Mãe, Filho(a)" /></div>
+        <div class="campo"><label>Data de nascimento</label><input id="m_nascimento" type="date" /></div>
+        <div class="campo">
+          <label>Sexo</label>
+          <select id="m_sexo">
+            <option value="">—</option>
+            <option>Feminino</option>
+            <option>Masculino</option>
+            <option>Outro</option>
+          </select>
+        </div>
+        <div class="campo"><label>Foto (opcional)</label><input id="m_foto" type="file" accept="image/*" /><div id="m_foto_preview"></div></div>
+      </div>
+
+      <h3 style="color:#0d3b8a;margin-top:18px">Contato & emergência</h3>
+      <div class="form-grade">
+        <div class="campo"><label>Telefone</label><input id="m_telefone" type="text" /></div>
+        <div class="campo"><label>Contato de emergência</label><input id="m_contatoEmergencia" type="text" placeholder="Nome e telefone" /></div>
+        <div class="campo"><label>Plano de saúde / convênio</label><input id="m_planoSaude" type="text" /></div>
+        <div class="campo"><label>Nº do plano / carteirinha</label><input id="m_numeroPlano" type="text" /></div>
+      </div>
+
+      <h3 style="color:#0d3b8a;margin-top:18px">Dados vitais</h3>
+      <div class="form-grade">
+        <div class="campo">
+          <label>Tipo sanguíneo</label>
+          <select id="m_tipoSanguineo">
+            <option value="">—</option>
+            <option>A+</option><option>A-</option>
+            <option>B+</option><option>B-</option>
+            <option>AB+</option><option>AB-</option>
+            <option>O+</option><option>O-</option>
+          </select>
+        </div>
+        <div class="campo"><label>Peso</label><input id="m_peso" type="text" placeholder="Ex.: 72 kg" /></div>
+        <div class="campo"><label>Altura</label><input id="m_altura" type="text" placeholder="Ex.: 1,75 m" /></div>
+      </div>
+
+      <h3 style="color:#0d3b8a;margin-top:18px">Histórico de saúde</h3>
+      <div class="form-grade">
+        <div class="campo largo"><label>Alergias (uma por linha)</label><textarea id="m_alergias" placeholder="Ex.: Penicilina&#10;Amendoim"></textarea></div>
+        <div class="campo largo"><label>Condições crônicas / doenças (uma por linha)</label><textarea id="m_condicoes" placeholder="Ex.: Hipertensão&#10;Diabetes tipo 2"></textarea></div>
+        <div class="campo largo"><label>Cirurgias / internações (uma por linha)</label><textarea id="m_cirurgias"></textarea></div>
+        <div class="campo largo"><label>Vacinas (uma por linha)</label><textarea id="m_vacinas" placeholder="Ex.: COVID-19 (2023)&#10;Tétano (2022)"></textarea></div>
+        <div class="campo largo"><label>Histórico familiar</label><textarea id="m_historicoFamiliar"></textarea></div>
+        <div class="campo largo"><label>Observações gerais</label><textarea id="m_observacoes"></textarea></div>
+      </div>
+
+      <h3 style="color:#0d3b8a;margin-top:18px">Medicamentos em uso</h3>
+      <div id="listaMedicamentos"></div>
+      <button class="secundario pequeno" id="btnAddMedicamento">+ Medicamento</button>
+
+      <h3 style="color:#0d3b8a;margin-top:18px">Médicos de referência</h3>
+      <div id="listaMedicos"></div>
+      <button class="secundario pequeno" id="btnAddMedico">+ Médico</button>
+
+      <h3 style="color:#0d3b8a;margin-top:18px">Exames</h3>
+      <p style="font-size:13px;color:#5b6776;margin:0 0 8px">Você pode anexar o arquivo (PDF/imagem — fica criptografado dentro do arquivo da família) e/ou colocar um link externo.</p>
+      <div id="listaExames"></div>
+      <button class="secundario pequeno" id="btnAddExame">+ Exame</button>
+
+      <div class="barra-acoes" style="margin-top:22px">
+        <button id="btnSalvarMembro" class="verde">Salvar membro</button>
+        <button id="btnCancelarMembro" class="secundario">Cancelar</button>
+      </div>
+    </section>
+
+    <!-- Gerar arquivo -->
+    <section class="painel">
+      <h2>4. Gerar arquivo criptografado</h2>
+      <div class="form-grade">
+        <div class="campo">
+          <label>Senha de criptografia</label>
+          <input id="senhaSalvar" type="text" value="hatanaka" />
+        </div>
+        <div class="campo">
+          <label>Iterações PBKDF2 (segurança — maior = mais lento)</label>
+          <input id="iteracoes" type="number" value="250000" min="100000" step="50000" />
+        </div>
+      </div>
+
+      <div id="boxPasta" style="background:#eaf2ff;border:1px solid #c7dbff;border-radius:10px;padding:12px 14px;margin:6px 0 14px;font-size:13px">
+        <div id="statusPasta" style="margin-bottom:8px"></div>
+        <button id="btnConectarPasta" class="secundario pequeno" type="button">📁 Conectar pasta do projeto</button>
+        <button id="btnEsquecerPasta" class="secundario pequeno" type="button" style="display:none">Esquecer pasta</button>
+      </div>
+
+      <div class="barra-acoes">
+        <button id="btnSalvarPasta">💾 Salvar na pasta do projeto</button>
+        <button id="btnGerar" class="secundario">⬇️ Baixar (pasta Downloads)</button>
+        <span id="statusGerar"></span>
+      </div>
+      <p style="font-size:12px;color:#5b6776;margin-bottom:0">O arquivo é nomeado automaticamente conforme a família (ex.: <code>dados-hatanaka.json</code>). Ao salvar na pasta do projeto, o visualizador local reflete na hora (recarregue a página). Para publicar para todos, faça o commit/push no GitHub.</p>
+    </section>
+  </main>
+
+  <script src="cripto.js"></script>
+  <script>
+    let estado = { id: "", familia: "", membros: [] };
+    let edicaoIndex = -1; // -1 = novo
+    let manifesto = [];
+
+    /* ---------- utilidades ---------- */
+    function $(id) { return document.getElementById(id); }
+
+    /* ---------- rascunho local (autosave) ---------- */
+    function chaveRascunho(id) { return "anamnese_rascunho_" + id; }
+
+    function salvarRascunho() {
+      if (!estado.id) return;
+      try {
+        localStorage.setItem(chaveRascunho(estado.id), JSON.stringify({
+          familia: estado.familia, membros: estado.membros, em: new Date().toLocaleString("pt-BR"),
+        }));
+        const s = $("statusRascunho");
+        if (s) s.textContent = "Rascunho salvo neste navegador ✓";
+      } catch (e) { /* localStorage indisponível */ }
+    }
+
+    function lerRascunho(id) {
+      if (!id) return null;
+      try { const s = localStorage.getItem(chaveRascunho(id)); return s ? JSON.parse(s) : null; }
+      catch (e) { return null; }
+    }
+
+    function mostrarAvisoRascunho(em) {
+      const el = $("avisoRascunho");
+      if (em) {
+        el.style.display = "block";
+        el.innerHTML = `📝 <strong>Rascunho local restaurado</strong> (salvo em ${em}). O que você editar fica guardado neste navegador automaticamente — mesmo sem gerar o arquivo. `
+          + `<button class="secundario pequeno" id="btnDescartarRascunho" type="button">Descartar rascunho</button>`;
+        $("btnDescartarRascunho").onclick = () => {
+          if (!confirm("Descartar o rascunho local desta família? Você voltará a uma lista vazia (use 'Carregar do servidor' para puxar a versão publicada).")) return;
+          if (estado.id) localStorage.removeItem(chaveRascunho(estado.id));
+          estado.membros = [];
+          renderListaMembros();
+          mostrarAvisoRascunho(null);
+          $("statusRascunho").textContent = "";
+        };
+      } else {
+        el.style.display = "none";
+        el.innerHTML = "";
+      }
+    }
+
+    /* ---------- seleção de família ---------- */
+    async function carregarManifesto() {
+      try {
+        const r = await fetch("familias.json", { cache: "no-store" });
+        if (r.ok) manifesto = await r.json();
+      } catch (e) { manifesto = []; }
+      const sel = $("familiaSelect");
+      sel.innerHTML = "";
+      manifesto.forEach(f => {
+        const o = document.createElement("option");
+        o.value = f.id; o.textContent = f.nome + "  (" + f.arquivo + ")";
+        sel.appendChild(o);
+      });
+      const nova = document.createElement("option");
+      nova.value = "__nova__"; nova.textContent = "+ Nova família...";
+      sel.appendChild(nova);
+      aplicarSelecao();
+    }
+
+    function familiaAtual() {
+      const v = $("familiaSelect").value;
+      if (v === "__nova__") {
+        return { id: ($("novaFamiliaId").value || "").trim().toLowerCase().replace(/\s+/g, "-"), nome: ($("novaFamiliaNome").value || "").trim() };
+      }
+      const f = manifesto.find(x => x.id === v);
+      return f ? { id: f.id, nome: f.nome } : { id: "", nome: "" };
+    }
+
+    function aplicarSelecao() {
+      const ehNova = $("familiaSelect").value === "__nova__";
+      $("boxNovaFamilia").style.display = ehNova ? "block" : "none";
+      const fa = familiaAtual();
+      estado.id = fa.id;
+      estado.familia = fa.nome;
+      $("familiaNome").value = fa.nome;
+      $("senhaSalvar").value = fa.id || "";  // senha padrão = identificador
+      $("statusRascunho").textContent = "";
+
+      // Se houver um rascunho local desta família, restaura para continuar de onde parou.
+      const r = lerRascunho(fa.id);
+      if (r && (r.membros || []).length) {
+        estado.familia = r.familia || fa.nome;
+        estado.membros = r.membros || [];
+        $("familiaNome").value = estado.familia;
+        mostrarAvisoRascunho(r.em);
+      } else {
+        estado.membros = [];
+        mostrarAvisoRascunho(null);
+      }
+      renderListaMembros();
+    }
+
+    $("familiaSelect").addEventListener("change", aplicarSelecao);
+    $("novaFamiliaId").addEventListener("input", () => { const fa = familiaAtual(); estado.id = fa.id; $("senhaSalvar").value = fa.id; });
+    $("novaFamiliaNome").addEventListener("input", () => { estado.familia = ($("novaFamiliaNome").value || "").trim(); $("familiaNome").value = estado.familia; salvarRascunho(); });
+
+    function lerArquivoBase64(file) {
+      return new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onload = () => {
+          const dataUrl = r.result;
+          const base64 = String(dataUrl).split(",")[1] || "";
+          res({ base64, mime: file.type, nome: file.name, dataUrl });
+        };
+        r.onerror = rej;
+        r.readAsDataURL(file);
+      });
+    }
+
+    function linhasParaArray(txt) {
+      return (txt || "").split("\n").map(s => s.trim()).filter(Boolean);
+    }
+    function arrayParaLinhas(arr) {
+      return (arr || []).map(i => typeof i === "string" ? i : (i.descricao || "")).join("\n");
+    }
+
+    /* ---------- linhas repetíveis ---------- */
+    function rowMedicamento(d = {}) {
+      const div = document.createElement("div");
+      div.className = "item-repetivel medicamento";
+      div.innerHTML = `
+        <button class="perigo pequeno remover" type="button">×</button>
+        <div class="form-grade">
+          <div class="campo"><label>Nome</label><input class="md_nome" value="${(d.nome||'').replace(/"/g,'&quot;')}"></div>
+          <div class="campo"><label>Dose</label><input class="md_dose" value="${(d.dose||'').replace(/"/g,'&quot;')}"></div>
+          <div class="campo"><label>Frequência</label><input class="md_freq" value="${(d.frequencia||'').replace(/"/g,'&quot;')}"></div>
+        </div>`;
+      div.querySelector(".remover").onclick = () => div.remove();
+      return div;
+    }
+
+    function rowMedico(d = {}) {
+      const div = document.createElement("div");
+      div.className = "item-repetivel medico";
+      div.innerHTML = `
+        <button class="perigo pequeno remover" type="button">×</button>
+        <div class="form-grade">
+          <div class="campo"><label>Nome</label><input class="mc_nome" value="${(d.nome||'').replace(/"/g,'&quot;')}"></div>
+          <div class="campo"><label>Especialidade</label><input class="mc_esp" value="${(d.especialidade||'').replace(/"/g,'&quot;')}"></div>
+          <div class="campo"><label>Telefone</label><input class="mc_tel" value="${(d.telefone||'').replace(/"/g,'&quot;')}"></div>
+        </div>`;
+      div.querySelector(".remover").onclick = () => div.remove();
+      return div;
+    }
+
+    function rowExame(d = {}) {
+      const div = document.createElement("div");
+      div.className = "item-repetivel exame-row";
+      div.innerHTML = `
+        <button class="perigo pequeno remover" type="button">×</button>
+        <div class="form-grade">
+          <div class="campo"><label>Nome do exame</label><input class="ex_nome" value="${(d.nome||'').replace(/"/g,'&quot;')}"></div>
+          <div class="campo"><label>Tipo</label><input class="ex_tipo" placeholder="Ex.: Sangue, Raio-X" value="${(d.tipo||'').replace(/"/g,'&quot;')}"></div>
+          <div class="campo"><label>Data</label><input class="ex_data" type="date" value="${d.data||''}"></div>
+          <div class="campo largo"><label>Observação</label><textarea class="ex_obs">${d.observacao||''}</textarea></div>
+          <div class="campo"><label>Arquivo (PDF/imagem)</label><input class="ex_arquivo" type="file" accept=".pdf,image/*"><div class="ex_arquivo_info" style="font-size:12px;color:#5b6776;margin-top:4px"></div></div>
+          <div class="campo"><label>Link externo (opcional)</label><input class="ex_link" type="url" placeholder="https://..." value="${(d.link||'').replace(/"/g,'&quot;')}"></div>
+        </div>`;
+      div.querySelector(".remover").onclick = () => div.remove();
+
+      const info = div.querySelector(".ex_arquivo_info");
+      const fileInput = div.querySelector(".ex_arquivo");
+      if (d.arquivo && d.arquivo.base64) {
+        fileInput.dataset.b64 = d.arquivo.base64;
+        fileInput.dataset.mime = d.arquivo.mime || "";
+        fileInput.dataset.fname = d.arquivo.nome || "arquivo";
+        info.textContent = "Arquivo atual: " + (d.arquivo.nome || "arquivo") + " (selecione outro para substituir)";
+      }
+      fileInput.addEventListener("change", async () => {
+        const f = fileInput.files[0];
+        if (!f) return;
+        info.textContent = "Lendo...";
+        const a = await lerArquivoBase64(f);
+        fileInput.dataset.b64 = a.base64;
+        fileInput.dataset.mime = a.mime;
+        fileInput.dataset.fname = a.nome;
+        info.textContent = "✔ " + a.nome + " (" + Math.round(a.base64.length * 0.75 / 1024) + " KB)";
+      });
+      return div;
+    }
+
+    $("btnAddMedicamento").onclick = () => $("listaMedicamentos").appendChild(rowMedicamento());
+    $("btnAddMedico").onclick = () => $("listaMedicos").appendChild(rowMedico());
+    $("btnAddExame").onclick = () => $("listaExames").appendChild(rowExame());
+
+    /* ---------- abrir / salvar membro ---------- */
+    function abrirFormMembro(membro, index) {
+      edicaoIndex = index;
+      membro = membro || {};
+      $("tituloMembro").textContent = index >= 0 ? "Editar: " + (membro.nome || "") : "Novo membro";
+      $("m_nome").value = membro.nome || "";
+      $("m_parentesco").value = membro.parentesco || "";
+      $("m_nascimento").value = membro.nascimento || "";
+      $("m_sexo").value = membro.sexo || "";
+      $("m_telefone").value = membro.telefone || "";
+      $("m_contatoEmergencia").value = membro.contatoEmergencia || "";
+      $("m_planoSaude").value = membro.planoSaude || "";
+      $("m_numeroPlano").value = membro.numeroPlano || "";
+      $("m_tipoSanguineo").value = membro.tipoSanguineo || "";
+      $("m_peso").value = membro.peso || "";
+      $("m_altura").value = membro.altura || "";
+      $("m_alergias").value = arrayParaLinhas(membro.alergias);
+      $("m_condicoes").value = arrayParaLinhas(membro.condicoes);
+      $("m_cirurgias").value = arrayParaLinhas(membro.cirurgias);
+      $("m_vacinas").value = arrayParaLinhas(membro.vacinas);
+      $("m_historicoFamiliar").value = membro.historicoFamiliar || "";
+      $("m_observacoes").value = membro.observacoes || "";
+
+      const fotoPrev = $("m_foto_preview");
+      fotoPrev.innerHTML = "";
+      $("m_foto").value = "";
+      delete $("m_foto").dataset.dataurl;
+      if (membro.foto) {
+        $("m_foto").dataset.dataurl = membro.foto;
+        fotoPrev.innerHTML = `<img src="${membro.foto}" style="width:60px;height:60px;border-radius:50%;object-fit:cover;margin-top:6px">`;
+      }
+
+      $("listaMedicamentos").innerHTML = "";
+      (membro.medicamentos || []).forEach(d => $("listaMedicamentos").appendChild(rowMedicamento(d)));
+      $("listaMedicos").innerHTML = "";
+      (membro.medicos || []).forEach(d => $("listaMedicos").appendChild(rowMedico(d)));
+      $("listaExames").innerHTML = "";
+      (membro.exames || []).forEach(d => $("listaExames").appendChild(rowExame(d)));
+
+      $("painelMembro").style.display = "block";
+      $("painelMembro").scrollIntoView({ behavior: "smooth" });
+    }
+
+    $("m_foto").addEventListener("change", async () => {
+      const f = $("m_foto").files[0];
+      if (!f) return;
+      const a = await lerArquivoBase64(f);
+      $("m_foto").dataset.dataurl = a.dataUrl;
+      $("m_foto_preview").innerHTML = `<img src="${a.dataUrl}" style="width:60px;height:60px;border-radius:50%;object-fit:cover;margin-top:6px">`;
+    });
+
+    function coletarMembro() {
+      const medicamentos = [...document.querySelectorAll("#listaMedicamentos .medicamento")].map(r => ({
+        nome: r.querySelector(".md_nome").value.trim(),
+        dose: r.querySelector(".md_dose").value.trim(),
+        frequencia: r.querySelector(".md_freq").value.trim(),
+      })).filter(x => x.nome);
+
+      const medicos = [...document.querySelectorAll("#listaMedicos .medico")].map(r => ({
+        nome: r.querySelector(".mc_nome").value.trim(),
+        especialidade: r.querySelector(".mc_esp").value.trim(),
+        telefone: r.querySelector(".mc_tel").value.trim(),
+      })).filter(x => x.nome);
+
+      const exames = [...document.querySelectorAll("#listaExames .exame-row")].map(r => {
+        const fi = r.querySelector(".ex_arquivo");
+        const ex = {
+          nome: r.querySelector(".ex_nome").value.trim(),
+          tipo: r.querySelector(".ex_tipo").value.trim(),
+          data: r.querySelector(".ex_data").value,
+          observacao: r.querySelector(".ex_obs").value.trim(),
+          link: r.querySelector(".ex_link").value.trim(),
+        };
+        if (fi.dataset.b64) {
+          ex.arquivo = { base64: fi.dataset.b64, mime: fi.dataset.mime, nome: fi.dataset.fname };
+        }
+        return ex;
+      }).filter(x => x.nome || x.link || x.arquivo);
+
+      return {
+        nome: $("m_nome").value.trim(),
+        parentesco: $("m_parentesco").value.trim(),
+        nascimento: $("m_nascimento").value,
+        sexo: $("m_sexo").value,
+        foto: $("m_foto").dataset.dataurl || "",
+        telefone: $("m_telefone").value.trim(),
+        contatoEmergencia: $("m_contatoEmergencia").value.trim(),
+        planoSaude: $("m_planoSaude").value.trim(),
+        numeroPlano: $("m_numeroPlano").value.trim(),
+        tipoSanguineo: $("m_tipoSanguineo").value,
+        peso: $("m_peso").value.trim(),
+        altura: $("m_altura").value.trim(),
+        alergias: linhasParaArray($("m_alergias").value),
+        condicoes: linhasParaArray($("m_condicoes").value),
+        cirurgias: linhasParaArray($("m_cirurgias").value),
+        vacinas: linhasParaArray($("m_vacinas").value),
+        historicoFamiliar: $("m_historicoFamiliar").value.trim(),
+        observacoes: $("m_observacoes").value.trim(),
+        medicamentos, medicos, exames,
+      };
+    }
+
+    $("btnSalvarMembro").onclick = () => {
+      const m = coletarMembro();
+      if (!m.nome) { alert("Informe o nome do membro."); return; }
+      if (edicaoIndex >= 0) estado.membros[edicaoIndex] = m;
+      else estado.membros.push(m);
+      $("painelMembro").style.display = "none";
+      renderListaMembros();
+      salvarRascunho();
+    };
+
+    $("btnCancelarMembro").onclick = () => { $("painelMembro").style.display = "none"; };
+    $("btnAddMembro").onclick = () => abrirFormMembro({}, -1);
+
+    function renderListaMembros() {
+      const lista = $("listaMembros");
+      lista.innerHTML = "";
+      if (!estado.membros.length) {
+        lista.innerHTML = '<p style="color:#5b6776">Nenhum membro ainda.</p>';
+        return;
+      }
+      estado.membros.forEach((m, i) => {
+        const div = document.createElement("div");
+        div.className = "membro-lista-item";
+        div.innerHTML = `<span class="nome">${(m.nome||"Sem nome")}</span>
+          <span style="color:#5b6776;font-size:13px">${m.parentesco||""}</span>
+          <button class="secundario pequeno editar">Editar</button>
+          <button class="perigo pequeno remover">Remover</button>`;
+        div.querySelector(".editar").onclick = () => abrirFormMembro(JSON.parse(JSON.stringify(m)), i);
+        div.querySelector(".remover").onclick = () => {
+          if (confirm("Remover " + (m.nome||"este membro") + "?")) { estado.membros.splice(i, 1); renderListaMembros(); salvarRascunho(); }
+        };
+        lista.appendChild(div);
+      });
+    }
+
+    $("familiaNome").addEventListener("input", e => { estado.familia = e.target.value; salvarRascunho(); });
+
+    /* ---------- carregar existente ---------- */
+    function aplicarDadosCarregados(dados, status, qtd) {
+      const fa = familiaAtual();
+      estado = { id: fa.id, familia: dados.familia || fa.nome || "", membros: dados.membros || [] };
+      $("familiaNome").value = estado.familia;
+      renderListaMembros();
+      mostrarAvisoRascunho(null);
+      salvarRascunho();
+      status.textContent = "✔ Carregado! " + estado.membros.length + " membro(s). Edite à vontade — fica salvo no navegador.";
+      status.className = "status-ok";
+    }
+
+    $("btnCarregar").onclick = async () => {
+      const status = $("statusCarregar");
+      const f = $("arquivoExistente").files[0];
+      const senha = $("senhaCarregar").value;
+      if (!f) { status.textContent = "Selecione o arquivo."; status.className = "status-erro"; return; }
+      status.textContent = "Descriptografando..."; status.className = "";
+      try {
+        const pacote = JSON.parse(await f.text());
+        const dados = await Cripto.descriptografar(pacote, senha);
+        aplicarDadosCarregados(dados, status);
+      } catch (e) {
+        status.textContent = "Falha: senha incorreta ou arquivo inválido.";
+        status.className = "status-erro";
+      }
+    };
+
+    $("btnCarregarServidor").onclick = async () => {
+      const status = $("statusCarregar");
+      const senha = $("senhaCarregar").value;
+      const fa = familiaAtual();
+      if (!fa.id) { status.textContent = "Escolha uma família."; status.className = "status-erro"; return; }
+      const arquivo = (manifesto.find(x => x.id === fa.id) || {}).arquivo || ("dados-" + fa.id + ".json");
+      status.textContent = "Buscando " + arquivo + "..."; status.className = "";
+      try {
+        const r = await fetch(arquivo, { cache: "no-store" });
+        if (!r.ok) throw new Error("não encontrado");
+        const pacote = await r.json();
+        const dados = await Cripto.descriptografar(pacote, senha);
+        aplicarDadosCarregados(dados, status);
+      } catch (e) {
+        status.textContent = "Falha: arquivo não encontrado, senha incorreta ou acesso local (use 'do arquivo').";
+        status.className = "status-erro";
+      }
+    };
+
+    /* ---------- gerar ---------- */
+    async function montarPacote() {
+      const senha = $("senhaSalvar").value;
+      const fa = familiaAtual();
+      if (!fa.id) throw new Error("Escolha ou crie uma família (com identificador).");
+      if (!senha) throw new Error("Defina uma senha.");
+      const iteracoes = parseInt($("iteracoes").value, 10) || 250000;
+      const nomeArquivo = (manifesto.find(x => x.id === fa.id) || {}).arquivo || ("dados-" + fa.id + ".json");
+      const objeto = {
+        familia: estado.familia || fa.nome || fa.id,
+        atualizadoEm: new Date().toLocaleString("pt-BR"),
+        membros: estado.membros,
+      };
+      const pacote = await Cripto.criptografar(objeto, senha, iteracoes);
+      return { nomeArquivo, pacoteStr: JSON.stringify(pacote, null, 2) };
+    }
+
+    $("btnGerar").onclick = async () => {
+      const status = $("statusGerar");
+      status.textContent = "Criptografando..."; status.className = "";
+      try {
+        const { nomeArquivo, pacoteStr } = await montarPacote();
+        const blob = new Blob([pacoteStr], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = nomeArquivo;
+        a.click();
+        URL.revokeObjectURL(url);
+        status.textContent = "✔ " + nomeArquivo + " baixado em Downloads. Mova-o para a pasta do projeto / suba no GitHub.";
+        status.className = "status-ok";
+      } catch (e) {
+        status.textContent = "Erro: " + e.message;
+        status.className = "status-erro";
+      }
+    };
+
+    /* ---------- salvar direto na pasta do projeto (File System Access API) ---------- */
+    let pastaHandle = null;
+
+    function suportaFS() { return typeof window.showDirectoryPicker === "function"; }
+
+    // IndexedDB mínimo para lembrar o handle da pasta entre sessões.
+    function idbAbrir() {
+      return new Promise((res, rej) => {
+        const o = indexedDB.open("anamnese", 1);
+        o.onupgradeneeded = () => o.result.createObjectStore("handles");
+        o.onsuccess = () => res(o.result);
+        o.onerror = () => rej(o.error);
+      });
+    }
+    async function idbGet(key) {
+      const db = await idbAbrir();
+      return new Promise((res, rej) => {
+        const r = db.transaction("handles", "readonly").objectStore("handles").get(key);
+        r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+      });
+    }
+    async function idbSet(key, val) {
+      const db = await idbAbrir();
+      return new Promise((res, rej) => {
+        const r = db.transaction("handles", "readwrite").objectStore("handles").put(val, key);
+        r.onsuccess = () => res(); r.onerror = () => rej(r.error);
+      });
+    }
+    async function idbDel(key) {
+      const db = await idbAbrir();
+      return new Promise((res, rej) => {
+        const r = db.transaction("handles", "readwrite").objectStore("handles").delete(key);
+        r.onsuccess = () => res(); r.onerror = () => rej(r.error);
+      });
+    }
+
+    async function garantirPermissao(handle, interativo) {
+      const opts = { mode: "readwrite" };
+      if ((await handle.queryPermission(opts)) === "granted") return true;
+      if (interativo && (await handle.requestPermission(opts)) === "granted") return true;
+      return false;
+    }
+
+    async function atualizarStatusPasta() {
+      const el = $("statusPasta");
+      const btnEsquecer = $("btnEsquecerPasta");
+      if (!suportaFS()) {
+        el.innerHTML = "⚠️ Seu navegador não permite salvar direto na pasta (use Chrome ou Edge). Use o botão de baixar.";
+        $("btnConectarPasta").style.display = "none";
+        $("btnSalvarPasta").disabled = true;
+        $("btnSalvarPasta").style.opacity = "0.5";
+        return;
+      }
+      if (pastaHandle) {
+        const perm = await pastaHandle.queryPermission({ mode: "readwrite" });
+        el.innerHTML = `✅ Pasta conectada: <strong>${pastaHandle.name}</strong>` +
+          (perm === "granted" ? "" : ` <span style="color:#b8860b">(vai pedir permissão ao salvar)</span>`);
+        btnEsquecer.style.display = "";
+        $("btnConectarPasta").textContent = "📁 Trocar pasta";
+      } else {
+        el.innerHTML = "Nenhuma pasta conectada. Conecte a pasta do projeto para salvar sempre no mesmo lugar.";
+        btnEsquecer.style.display = "none";
+        $("btnConectarPasta").textContent = "📁 Conectar pasta do projeto";
+      }
+    }
+
+    async function conectarPasta() {
+      try {
+        const handle = await window.showDirectoryPicker({ mode: "readwrite", id: "anamnese-projeto" });
+        if (!(await garantirPermissao(handle, true))) { return; }
+        pastaHandle = handle;
+        await idbSet("pastaProjeto", handle);
+        await atualizarStatusPasta();
+      } catch (e) { /* usuário cancelou */ }
+    }
+
+    async function salvarNaPasta(nomeArquivo, pacoteStr) {
+      if (!(await garantirPermissao(pastaHandle, true))) throw new Error("permissão negada");
+      const fh = await pastaHandle.getFileHandle(nomeArquivo, { create: true });
+      const w = await fh.createWritable();
+      await w.write(pacoteStr);
+      await w.close();
+    }
+
+    $("btnConectarPasta").onclick = conectarPasta;
+
+    $("btnEsquecerPasta").onclick = async () => {
+      pastaHandle = null;
+      await idbDel("pastaProjeto");
+      await atualizarStatusPasta();
+    };
+
+    $("btnSalvarPasta").onclick = async () => {
+      const status = $("statusGerar");
+      try {
+        if (!suportaFS()) throw new Error("navegador sem suporte; use o botão Baixar.");
+        if (!pastaHandle) { await conectarPasta(); if (!pastaHandle) { status.textContent = "Conexão de pasta cancelada."; status.className = "status-erro"; return; } }
+        status.textContent = "Criptografando e salvando..."; status.className = "";
+        const { nomeArquivo, pacoteStr } = await montarPacote();
+        await salvarNaPasta(nomeArquivo, pacoteStr);
+        status.textContent = "✔ Salvo em " + pastaHandle.name + "/" + nomeArquivo + ". Recarregue o visualizador para ver. (Lembre de commitar no GitHub para os outros.)";
+        status.className = "status-ok";
+      } catch (e) {
+        status.textContent = "Erro ao salvar: " + e.message;
+        status.className = "status-erro";
+      }
+    };
+
+    async function restaurarPasta() {
+      if (!suportaFS()) { await atualizarStatusPasta(); return; }
+      try { const h = await idbGet("pastaProjeto"); if (h) pastaHandle = h; } catch (e) { /* ignora */ }
+      await atualizarStatusPasta();
+    }
+
+    restaurarPasta();
+    carregarManifesto();
+    renderListaMembros();
+  </script>
+</body>
+</html>

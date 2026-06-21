@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>Anamnese da Família</title>
+  <link rel="stylesheet" href="estilo.css" />
+</head>
+<body>
+
+  <!-- Tela de senha -->
+  <div id="telaSenha" class="tela-senha">
+    <div class="caixa-senha">
+      <div class="cadeado">🔒</div>
+      <h1>Anamnese da Família</h1>
+      <p>Os dados estão criptografados. Digite a senha da família para visualizar.</p>
+      <form id="formSenha" class="campo-senha">
+        <input id="inputSenha" type="password" placeholder="Senha da família" autocomplete="current-password" autofocus />
+        <button type="submit">Abrir</button>
+      </form>
+      <p id="erroSenha" class="erro"></p>
+      <div id="semDados" style="display:none">
+        <p style="font-size:13px;color:#5b6776">Não consegui carregar os dados automaticamente (acesso local). Selecione os arquivos <code>dados-*.json</code> manualmente:</p>
+        <input id="arquivoDados" type="file" accept=".json,application/json" multiple />
+      </div>
+      <div class="aviso">
+        ⚠️ Estes dados são sensíveis. Não compartilhe a senha por canais inseguros e evite acessar em computadores públicos.
+      </div>
+    </div>
+  </div>
+
+  <!-- App -->
+  <div id="app" style="display:none">
+    <header class="topo">
+      <h1>🩺 Anamnese</h1>
+      <span class="familia-nome" id="familiaNome"></span>
+      <span class="espaco"></span>
+      <input id="busca" class="busca" type="search" placeholder="Buscar membro..." />
+      <button class="secundario pequeno" onclick="window.print()">🖨️ Imprimir</button>
+      <button class="secundario pequeno" id="btnSair">Sair</button>
+    </header>
+    <main class="conteudo">
+      <div id="avisoRascunhoView" class="dica" style="display:none;background:#fff7e6;border-color:#ffe0a3;color:#5a4a1a"></div>
+      <div id="atualizado" style="font-size:12px;color:#5b6776;margin-bottom:12px"></div>
+      <div id="grade" class="grade"></div>
+      <div id="vazio" class="vazio" style="display:none">Nenhum membro cadastrado ainda. Use o <a href="editor.html">editor</a> para adicionar.</div>
+    </main>
+  </div>
+
+  <script src="cripto.js"></script>
+  <script>
+    // Cada item: { id, nome, arquivo, pacote }  (pacote = conteúdo cifrado já carregado)
+    let familias = [];
+
+    async function carregarFamilias() {
+      try {
+        const resp = await fetch("familias.json", { cache: "no-store" });
+        if (!resp.ok) throw new Error("manifesto ausente");
+        familias = await resp.json();
+        // Pré-carrega cada arquivo cifrado
+        await Promise.all(familias.map(async (f) => {
+          try {
+            const r = await fetch(f.arquivo, { cache: "no-store" });
+            if (r.ok) f.pacote = await r.json();
+          } catch (e) { /* ignora */ }
+        }));
+        if (!familias.some(f => f.pacote)) throw new Error("sem dados");
+        return true;
+      } catch (e) {
+        document.getElementById("semDados").style.display = "block";
+        return false;
+      }
+    }
+
+    document.getElementById("arquivoDados").addEventListener("change", async (ev) => {
+      const arqs = [...ev.target.files];
+      if (!arqs.length) return;
+      familias = [];
+      for (const arq of arqs) {
+        try {
+          familias.push({ nome: arq.name, arquivo: arq.name, pacote: JSON.parse(await arq.text()) });
+        } catch (e) { /* ignora arquivo inválido */ }
+      }
+      const erro = document.getElementById("erroSenha");
+      erro.textContent = familias.length + " arquivo(s) carregado(s). Digite a senha e clique em Abrir.";
+      erro.style.color = "#1a7f5a";
+    });
+
+    document.getElementById("formSenha").addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const erro = document.getElementById("erroSenha");
+      erro.style.color = "";
+      const senha = document.getElementById("inputSenha").value;
+      const disponiveis = familias.filter(f => f.pacote);
+      if (!disponiveis.length) { erro.textContent = "Dados ainda não carregados."; return; }
+      erro.textContent = "Verificando senha...";
+      for (const f of disponiveis) {
+        try {
+          const dados = await Cripto.descriptografar(f.pacote, senha);
+          mostrarApp(dados, f);
+          return;
+        } catch (e) { /* tenta a próxima família */ }
+      }
+      erro.textContent = "Senha incorreta. Nenhuma família corresponde a essa senha.";
+    });
+
+    let membrosAtuais = [];
+
+    function aplicarDataset(dados) {
+      document.getElementById("familiaNome").textContent = dados.familia ? "• " + dados.familia : "";
+      document.getElementById("atualizado").textContent = dados.atualizadoEm ? ("Última atualização: " + dados.atualizadoEm) : "";
+      membrosAtuais = dados.membros || [];
+      const termo = (document.getElementById("busca").value || "").toLowerCase();
+      filtrarRender(termo);
+    }
+
+    function filtrarRender(termo) {
+      renderMembros(membrosAtuais.filter(m =>
+        (m.nome || "").toLowerCase().includes(termo) ||
+        (m.parentesco || "").toLowerCase().includes(termo)
+      ));
+    }
+
+    function mostrarApp(dados, familia) {
+      document.getElementById("telaSenha").style.display = "none";
+      document.getElementById("app").style.display = "block";
+      aplicarDataset(dados);
+      verificarRascunho(familia, dados);
+    }
+
+    document.getElementById("busca").addEventListener("input", (e) => {
+      filtrarRender(e.target.value.toLowerCase());
+    });
+
+    // Detecta edições locais não publicadas (rascunho do editor) para a família aberta.
+    function verificarRascunho(familia, dadosPublicados) {
+      const aviso = document.getElementById("avisoRascunhoView");
+      aviso.style.display = "none";
+      aviso.innerHTML = "";
+      if (!familia || !familia.id) return;
+      let r = null;
+      try {
+        const s = localStorage.getItem("anamnese_rascunho_" + familia.id);
+        r = s ? JSON.parse(s) : null;
+      } catch (e) { return; }
+      if (!r || !(r.membros || []).length) return;
+
+      aviso.style.display = "block";
+      aviso.innerHTML = `📝 <strong>Há edições locais não publicadas</strong> para esta família (rascunho salvo neste navegador em ${r.em}). `
+        + `<button id="verRascunho" class="pequeno" type="button">Ver rascunho</button> `
+        + `<button id="verPublicado" class="secundario pequeno" type="button">Ver versão publicada</button>`
+        + `<span style="display:block;font-size:12px;margin-top:8px;color:#5b6776">Para que essas edições apareçam para todos (e no GitHub), abra o editor, clique em "Gerar e baixar" e substitua o arquivo <code>${familia.arquivo || ("dados-" + familia.id + ".json")}</code>.</span>`;
+
+      document.getElementById("verRascunho").onclick = () => {
+        aplicarDataset({ familia: r.familia || dadosPublicados.familia, atualizadoEm: "RASCUNHO local (não publicado) — " + r.em, membros: r.membros });
+        document.getElementById("verRascunho").style.display = "none";
+        document.getElementById("verPublicado").style.display = "";
+      };
+      document.getElementById("verPublicado").onclick = () => {
+        aplicarDataset(dadosPublicados);
+        document.getElementById("verRascunho").style.display = "";
+        document.getElementById("verPublicado").style.display = "none";
+      };
+      document.getElementById("verPublicado").style.display = "none";
+    }
+
+    document.getElementById("btnSair").addEventListener("click", () => location.reload());
+
+    /* ---------- Helpers de render ---------- */
+    function esc(s) {
+      return (s == null ? "" : String(s)).replace(/[&<>"']/g, c => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+      }[c]));
+    }
+
+    function iniciais(nome) {
+      return (nome || "?").split(/\s+/).filter(Boolean).slice(0, 2).map(p => p[0].toUpperCase()).join("");
+    }
+
+    function idade(nascimento) {
+      if (!nascimento) return "";
+      const d = new Date(nascimento);
+      if (isNaN(d)) return "";
+      const hoje = new Date();
+      let a = hoje.getFullYear() - d.getFullYear();
+      const m = hoje.getMonth() - d.getMonth();
+      if (m < 0 || (m === 0 && hoje.getDate() < d.getDate())) a--;
+      return a >= 0 ? a + " anos" : "";
+    }
+
+    function linha(rotulo, valor) {
+      if (!valor) return "";
+      return `<div class="linha"><span class="rotulo">${esc(rotulo)}</span><span class="valor">${esc(valor)}</span></div>`;
+    }
+
+    function secaoTexto(titulo, texto) {
+      if (!texto) return "";
+      return `<div class="secao"><h3>${esc(titulo)}</h3><div class="bloco-texto">${esc(texto)}</div></div>`;
+    }
+
+    function secaoLista(titulo, itens, fmt) {
+      if (!itens || !itens.length) return "";
+      const lis = itens.map(i => `<li>${fmt ? fmt(i) : esc(i)}</li>`).join("");
+      return `<div class="secao"><h3>${esc(titulo)}</h3><ul class="lista-itens">${lis}</ul></div>`;
+    }
+
+    function renderExame(ex) {
+      let acoes = "";
+      if (ex.arquivo && ex.arquivo.base64) {
+        acoes += `<button class="pequeno secundario" onclick="abrirArquivo(this)" data-mime="${esc(ex.arquivo.mime)}" data-nome="${esc(ex.arquivo.nome)}" data-b64="${esc(ex.arquivo.base64)}">📄 Abrir ${esc(ex.arquivo.nome || "arquivo")}</button>`;
+      }
+      if (ex.link) {
+        acoes += `<a class="pequeno" style="display:inline-block;padding:7px 12px;background:#e9eef5;border-radius:10px;text-decoration:none;color:#1c2530;font-weight:600" href="${esc(ex.link)}" target="_blank" rel="noopener">🔗 Link externo</a>`;
+      }
+      return `<div class="exame">
+        <div class="exame-topo">
+          <span class="exame-nome">${esc(ex.nome || "Exame")}${ex.tipo ? " — " + esc(ex.tipo) : ""}</span>
+          <span class="exame-data">${esc(ex.data || "")}</span>
+        </div>
+        ${ex.observacao ? `<div class="exame-obs">${esc(ex.observacao)}</div>` : ""}
+        ${acoes ? `<div class="exame-acoes">${acoes}</div>` : ""}
+      </div>`;
+    }
+
+    function abrirArquivo(btn) {
+      const b64 = btn.dataset.b64;
+      const mime = btn.dataset.mime || "application/octet-stream";
+      const bin = atob(b64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const blob = new Blob([bytes], { type: mime });
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    }
+
+    function renderMembros(membros) {
+      const grade = document.getElementById("grade");
+      const vazio = document.getElementById("vazio");
+      grade.innerHTML = "";
+      if (!membros.length) { vazio.style.display = "block"; return; }
+      vazio.style.display = "none";
+
+      membros.forEach((m) => {
+        const tags = [];
+        if (m.tipoSanguineo) tags.push(`<span class="tag sangue">🩸 ${esc(m.tipoSanguineo)}</span>`);
+        if (m.alergias && m.alergias.length) tags.push(`<span class="tag alergia">⚠️ ${m.alergias.length} alergia(s)</span>`);
+        if (m.condicoes && m.condicoes.length) tags.push(`<span class="tag cronico">${m.condicoes.length} condição(ões)</span>`);
+
+        const card = document.createElement("div");
+        card.className = "membro";
+
+        const dadosVitais = [
+          linha("Nascimento", m.nascimento ? m.nascimento + (idade(m.nascimento) ? " (" + idade(m.nascimento) + ")" : "") : ""),
+          linha("Sexo", m.sexo),
+          linha("Tipo sanguíneo", m.tipoSanguineo),
+          linha("Peso", m.peso),
+          linha("Altura", m.altura),
+          linha("Telefone", m.telefone),
+          linha("Contato de emergência", m.contatoEmergencia),
+          linha("Plano de saúde", m.planoSaude),
+          linha("Nº do plano", m.numeroPlano),
+        ].join("");
+
+        const medicamentos = secaoLista("Medicamentos em uso", m.medicamentos, (i) =>
+          typeof i === "string" ? esc(i) : `${esc(i.nome)}${i.dose ? " — " + esc(i.dose) : ""}${i.frequencia ? " (" + esc(i.frequencia) + ")" : ""}`);
+
+        const medicos = secaoLista("Médicos de referência", m.medicos, (i) =>
+          typeof i === "string" ? esc(i) : `${esc(i.nome)}${i.especialidade ? " — " + esc(i.especialidade) : ""}${i.telefone ? " (" + esc(i.telefone) + ")" : ""}`);
+
+        const exames = (m.exames && m.exames.length)
+          ? `<div class="secao"><h3>Exames (${m.exames.length})</h3>${m.exames.map(renderExame).join("")}</div>`
+          : "";
+
+        card.innerHTML = `
+          <div class="membro-cabeca">
+            <div class="avatar">${m.foto ? `<img src="${esc(m.foto)}" alt="">` : esc(iniciais(m.nome))}</div>
+            <div class="info">
+              <div class="nome">${esc(m.nome || "Sem nome")}</div>
+              <div class="sub">${esc(m.parentesco || "")}${m.nascimento && idade(m.nascimento) ? " • " + idade(m.nascimento) : ""}</div>
+              <div class="tags">${tags.join("")}</div>
+            </div>
+          </div>
+          <div class="membro-corpo">
+            <div class="secao"><h3>Dados gerais</h3><div class="linhas">${dadosVitais}</div></div>
+            ${secaoLista("Alergias", m.alergias)}
+            ${secaoLista("Condições crônicas / doenças", m.condicoes)}
+            ${medicamentos}
+            ${secaoLista("Cirurgias / internações", m.cirurgias)}
+            ${secaoLista("Vacinas", m.vacinas)}
+            ${secaoTexto("Histórico familiar", m.historicoFamiliar)}
+            ${medicos}
+            ${secaoTexto("Observações", m.observacoes)}
+            ${exames}
+          </div>`;
+
+        card.querySelector(".membro-cabeca").addEventListener("click", () => card.classList.toggle("aberto"));
+        grade.appendChild(card);
+      });
+    }
+
+    carregarFamilias();
+  </script>
+</body>
+</html>
